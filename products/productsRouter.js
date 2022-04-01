@@ -7,23 +7,42 @@ const {
     deleteProduct
 } = require('./productsService');
 
+const { validateId } = require('../shared/middlewares')
+const { checkRole } = require('../shared/middlewares')
+
+const verifyProduct = async (request, response, next) => {
+    if(!await getProduct(+request.params.id)) return response.status(404).end()
+    else next()
+}
+
 productsRouter.get('/', async (request, response) => {
     response.status(200).json(await getAllProducts())
 })
 
-productsRouter.get('/:id', async (request, response) => {
+productsRouter.get('/:id', validateId, async (request, response) => {
     const id = +request.params.id
-    if(isNaN(id)) return response.status(400).send('invalid id')
-    response.status(200).json(await getProduct(id))
+    const product = await getProduct(id)
+    if(!product) return response.status(404).end()
+    else response.status(200).json(product)
 })
 
-productsRouter.put('/:id', async (request, response) => {
-    response.status(200).json(await updateProduct(request.body))
+productsRouter.put('/:id', validateId, verifyProduct, checkRole('admin'), async (request, response) => {
+    const id = +request.params.id
+    const { name, price, stock, category } = request.body
+    const product = {
+        id,
+        name,
+        price,
+        stock: stock || 0,
+        category
+    }
+    const updated = await updateProduct(product)
+    response.status(updated? 204 : 400).end()
 })
 
-productsRouter.delete('/:id', async (request, response) => {
+
+productsRouter.delete('/:id', validateId, verifyProduct, checkRole('admin'), async (request, response) => {
     const id = +request.params.id
-    if(isNaN(id)) return response.status(400).send('invalid id')
     try {
         deleteProduct(id)
         response.status(204).end()
@@ -31,7 +50,7 @@ productsRouter.delete('/:id', async (request, response) => {
         response.status(400).send(error)
     }
 })
-productsRouter.post('/', async (request, response) => {
+productsRouter.post('/', checkRole('admin'), async (request, response) => {
     response.status(200).json(await addProduct(request.body))
 })
 
